@@ -1,0 +1,8 @@
+# 临时产物
+obj/
+__pycache__/
+*.pyc
+
+# 本地开发配置
+tools/
+.claude/

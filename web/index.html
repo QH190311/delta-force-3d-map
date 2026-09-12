@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=3, user-scalable=yes, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0d13" />
+<title>三角洲行动 — 地图态势</title>
+<style>
+  :root{
+    --bg:#0a0d13; --panel:rgba(17,21,29,.88); --line:#242c3a; --line2:#323d50;
+    --fg:#e8eef8; --sub:#8794a8; --dim:#586476;
+    --accent:#3fa9ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
+    font:13px/1.55 system-ui,-apple-system,"Microsoft YaHei",sans-serif;
+    overscroll-behavior:none;-webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none}
+  canvas{display:block}
+
+  #top{position:absolute;top:0;left:0;right:0;height:48px;display:flex;align-items:center;
+    gap:12px;padding:0 max(14px,env(safe-area-inset-left));z-index:20;
+    background:linear-gradient(180deg,rgba(10,13,19,.96),rgba(10,13,19,.35));
+    border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+  #top .logo{font-weight:700;font-size:13px;white-space:nowrap}
+  #top .logo i{color:var(--accent);font-style:normal}
+  .chip{font-size:11px;color:var(--sub);border:1px solid var(--line);border-radius:20px;
+    padding:3px 10px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .chip b{color:var(--fg)}
+  #top .sp{flex:1}
+
+  #side{position:absolute;top:48px;left:0;bottom:0;width:200px;padding:12px;overflow-y:auto;
+    overscroll-behavior:contain;z-index:15;
+    background:linear-gradient(90deg,rgba(10,13,19,.94),rgba(10,13,19,.05))}
+  #side::-webkit-scrollbar{width:6px}
+  #side::-webkit-scrollbar-thumb{background:#2f3b4e;border-radius:3px}
+  .grp{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:var(--dim);
+    margin:0 4px 8px;font-weight:600}
+  .item{display:flex;align-items:center;gap:9px;padding:8px 10px;margin-bottom:5px;
+    border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;
+    transition:.13s;font-size:12.5px}
+  .item:hover{border-color:var(--line2);transform:translateX(2px)}
+  .item.on{border-color:var(--accent);background:rgba(63,169,255,.13)}
+  .item .dot{width:6px;height:6px;border-radius:50%;background:#3a4558;flex:none}
+  .item.on .dot{background:var(--accent);box-shadow:0 0 7px var(--accent)}
+  .item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .k{font-size:10px;color:var(--dim)}
+
+  #ctrl{position:absolute;top:60px;right:12px;width:206px;z-index:15;
+    max-height:calc(100vh - 72px);overflow-y:auto;overscroll-behavior:contain;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;
+    backdrop-filter:blur(12px)}
+  #ctrl::-webkit-scrollbar{width:6px}
+  #ctrl::-webkit-scrollbar-thumb{background:#2f3b4e;border-radius:3px}
+  #ctrl .h{padding:9px 12px;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;
+    color:var(--dim);border-bottom:1px solid var(--line);font-weight:600}
+  #ctrl .b{padding:10px 12px}
+  button{font:inherit;font-size:12px;padding:6px 8px;border-radius:7px;cursor:pointer;
+    border:1px solid var(--line);background:#141a24;color:var(--fg);transition:.13s}
+  button:hover{background:#1b2330}
+  button.on{background:rgba(63,169,255,.18);border-color:var(--accent);color:#cfe8ff}
+  .sw{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer}
+  .sw i{width:26px;height:15px;border-radius:8px;background:#232c3a;position:relative;
+    transition:.15s;flex:none}
+  .sw i::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;
+    border-radius:50%;background:#68788f;transition:.15s}
+  .sw.on i{background:rgba(63,169,255,.35)}
+  .sw.on i::after{left:13px;background:var(--accent)}
+
+  #btm{position:absolute;left:0;right:0;bottom:0;padding:8px max(14px,env(safe-area-inset-left));
+    font-size:11px;color:var(--dim);display:flex;gap:15px;flex-wrap:wrap;z-index:14;
+    pointer-events:none;background:linear-gradient(0deg,rgba(10,13,19,.94),rgba(10,13,19,0))}
+  kbd{background:#161d28;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;
+    padding:1px 5px;font:inherit;font-size:10px;color:#b8c7dc}
+
+  #hud{position:absolute;left:12px;bottom:42px;z-index:18;
+    font:11px/1.65 ui-monospace,Consolas,monospace;
+    background:rgba(10,13,19,.85);border:1px solid var(--line);border-radius:8px;
+    padding:6px 10px;color:var(--sub);pointer-events:none;backdrop-filter:blur(8px)}
+  #hud b{color:var(--fg)}
+  /* 设置滑条 */
+  .srow{display:grid;grid-template-columns:64px 1fr 38px;align-items:center;gap:7px;
+    padding:5px 0;font-size:11.5px}
+  .srow span{color:var(--sub);white-space:nowrap}
+  .srow b{text-align:right;font-variant-numeric:tabular-nums;font-size:11px;color:var(--fg)}
+  .srow input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;
+    background:transparent;margin:0;cursor:pointer}
+  .srow input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:3px;
+    background:linear-gradient(90deg,var(--accent),#2a3a52)}
+  .srow input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+    margin-top:-5px;border-radius:50%;background:#cfe8ff;border:2px solid var(--accent)}
+  .srow input[type=range]::-moz-range-track{height:3px;border-radius:3px;background:#2a3a52}
+  .srow input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;
+    background:#cfe8ff;border:2px solid var(--accent)}
+  #hud{white-space:nowrap}
+  #hud .warn{color:#ffb454}
+  #hud .bad{color:#ff6b7a}
+
+  #load{position:absolute;inset:0;display:none;place-items:center;z-index:60;
+    background:rgba(10,13,19,.9);backdrop-filter:blur(5px)}
+  #load.show{display:grid}
+  .box{text-align:center;min-width:280px}
+  .box .t{font-size:13px;margin-bottom:12px}
+  .bar{height:3px;background:#19212d;border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;transition:width .18s;
+    background:linear-gradient(90deg,var(--accent),#7ee0c0)}
+  .box .p{margin-top:9px;font-size:11px;color:var(--sub)}
+  #err{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:70;display:none;
+    max-width:560px;padding:16px 20px;border:1px solid #7a3030;border-radius:10px;
+    background:#180f11;color:#ffb0b0;font-size:12px;line-height:1.7;white-space:pre-wrap}
+  #err.show{display:block}
+
+  .touch-hint{display:none}
+  /* ================= 移动端(横屏为主) ================= */
+  #sheet-handle{display:none}
+  #rotate-tip{display:none}
+
+  @media (max-width:900px),(pointer:coarse){
+    /* 顶栏:压到最扁 */
+    #top{height:32px;padding:0 8px;gap:6px}
+    #top .logo{font-size:11px}
+    #top .logo i{display:none}
+    .chip{font-size:10px;padding:2px 7px}
+    #c-stat{display:none}
+
+    /* 地图列表:顶部横向滚 */
+    #side{top:32px;left:0;right:0;width:auto;bottom:auto;height:auto;padding:4px 6px;
+      display:flex;gap:6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+      background:linear-gradient(180deg,rgba(10,13,19,.95),rgba(10,13,19,.25))}
+    #side::-webkit-scrollbar{display:none}
+    #side .grp{display:none}
+    #list{display:flex;gap:6px;padding:0}
+    #list .item{margin:0;flex:none;padding:6px 12px;border-radius:20px;font-size:12px}
+    #list .item .k{display:none}
+
+    /* 控制面板:右侧滑入(横屏垂直空间紧张,不做底部抽屉) */
+    #ctrl{top:auto;left:auto;right:0;bottom:0;width:190px;
+      max-height:calc(100vh - 40px);
+      border-radius:12px 0 0 0;border-right:0;border-bottom:0;
+      padding-bottom:env(safe-area-inset-bottom);
+      transition:transform .22s ease}
+    #ctrl.collapsed{transform:translateX(calc(100% - 0px));pointer-events:none}
+    #ctrl .h{padding:8px 12px;font-size:10px}
+    #ctrl .b{padding:8px 12px}
+    #ctrl .sw{padding:7px 0;font-size:12.5px}
+    #ctrl .sw i{width:30px;height:18px;border-radius:9px}
+    #ctrl .sw i::after{width:14px;height:14px}
+    #ctrl .sw.on i::after{left:14px}
+    #ctrl button{padding:9px 6px;font-size:12.5px;min-height:38px}
+    #ctrl .btns{gap:6px}
+
+    /* 面板把手:贴在面板左边缘 */
+    #sheet-handle{display:flex;align-items:center;justify-content:center;
+      position:absolute;right:190px;top:50%;transform:translateY(-50%);
+      width:26px;height:64px;z-index:16;border-radius:10px 0 0 10px;
+      background:rgba(17,21,29,.9);border:1px solid var(--line);border-right:0;
+      font-size:10px;color:var(--sub);writing-mode:vertical-rl;
+      transition:right .22s ease;cursor:pointer}
+    #sheet-handle.down{right:0;border-radius:10px 0 0 10px}
+
+    /* HUD:左上角,让开地图列表 */
+    #hud{left:6px;right:auto;top:74px;bottom:auto;font-size:9.5px;padding:3px 7px;
+      line-height:1.45;max-width:min(52vw,220px);overflow:hidden}
+
+    #btm{display:none}
+    .kbd-hint{display:none}
+    .touch-hint{display:block}
+    .box{min-width:auto;width:min(80vw,320px)}
+  }
+
+  /* 超窄(小手机竖屏)—— 提示转横屏 */
+  @media (pointer:coarse) and (orientation:portrait) and (max-width:900px){
+    #rotate-tip{display:flex;position:absolute;left:50%;top:50%;
+      transform:translate(-50%,-50%);z-index:40;pointer-events:none;
+      flex-direction:column;align-items:center;gap:10px;
+      padding:16px 22px;border-radius:14px;
+      background:rgba(10,13,19,.82);border:1px solid var(--line);
+      backdrop-filter:blur(8px);font-size:13px;color:var(--sub);text-align:center}
+    #rotate-tip .ico{font-size:34px;line-height:1;animation:rot 2s ease-in-out infinite}
+    @keyframes rot{0%,40%{transform:rotate(0)}60%,100%{transform:rotate(90deg)}}
+  }
+
+  /* ---- 虚拟摇杆(仅触屏) ---- */
+  #stick{display:none;touch-action:none}
+  #vbtn{display:none;touch-action:none}
+  @media (max-width:900px), (pointer:coarse){
+    #stick{display:block;position:absolute;left:14px;bottom:calc(14px + env(safe-area-inset-bottom));
+      z-index:17;width:112px;height:112px;touch-action:none}
+    #stick .base{position:absolute;inset:0;border-radius:50%;
+      background:rgba(17,21,29,.5);border:1.5px solid rgba(63,169,255,.35);
+      backdrop-filter:blur(6px)}
+    #stick .base::before,#stick .base::after{content:'';position:absolute;
+      background:rgba(63,169,255,.18)}
+    #stick .base::before{left:50%;top:18%;bottom:18%;width:1px;transform:translateX(-50%)}
+    #stick .base::after{top:50%;left:18%;right:18%;height:1px;transform:translateY(-50%)}
+    #stick .knob{position:absolute;left:50%;top:50%;width:48px;height:48px;
+      margin:-24px 0 0 -24px;border-radius:50%;
+      background:radial-gradient(circle at 35% 32%,#7cc0ff,#3fa9ff 62%,#2b7fd4);
+      box-shadow:0 2px 10px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.18) inset;
+      transition:transform .08s;will-change:transform}
+
+    #vbtn{display:flex;flex-direction:column;gap:8px;position:absolute;
+      right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:17}
+    #vbtn button{width:46px;height:46px;border-radius:50%;font-size:15px;
+      background:rgba(17,21,29,.62);border:1.5px solid rgba(63,169,255,.35);
+      color:#cfe8ff;backdrop-filter:blur(6px);padding:0;line-height:1}
+    #vbtn button:active{background:rgba(63,169,255,.3)}
+  }
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="logo">DELTA FORCE · <i>地图态势</i></div>
+  <div class="chip" id="c-model">—</div>
+  <div class="chip" id="c-stat">就绪</div>
+  <div class="sp"></div>
+</div>
+
+<div id="side">
+  <div class="grp">地图</div>
+  <div id="list"></div>
+</div>
+
+<div id="ctrl">
+  <div class="h">图层</div>
+  <div class="b">
+    <div class="sw on" id="s-build"><i></i>建筑</div>
+    <div class="sw" id="s-term"><i></i>地形</div>
+    <div class="sw on" id="s-ally"><i></i>队友</div>
+    <div class="sw on" id="s-enemy"><i></i>敌人</div>
+    <div class="sw on" id="s-loot"><i></i>物资</div>
+    <div class="sw on" id="s-obj"><i></i>目标</div>
+  </div>
+  <div class="h">显示</div>
+  <div class="b">
+    <div class="sw" id="s-wire"><i></i>线框 (默认实体)</div>
+    <div class="sw" id="s-edge"><i></i>描边</div>
+    <div class="sw on" id="s-test"><i></i>测试数据</div>
+  </div>
+  <div class="h">相机速度</div>
+  <div class="b">
+    <div class="srow"><span>水平移动</span><input type="range" id="sp-h" min="10" max="300" value="100"><b id="sp-h-v">1.0×</b></div>
+    <div class="srow"><span>垂直升降</span><input type="range" id="sp-v" min="10" max="300" value="100"><b id="sp-v-v">1.0×</b></div>
+    <div class="srow"><span>转向灵敏度</span><input type="range" id="sp-r" min="10" max="300" value="100"><b id="sp-r-v">1.0×</b></div>
+    <button id="sp-reset" style="width:100%;margin-top:8px">恢复默认 (1.0×)</button>
+  </div>
+  <div class="h">画质 (卡就调低)</div>
+  <div class="b">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <button id="q-low">流畅</button>
+      <button id="q-mid" class="on">标准</button>
+      <button id="q-high">高清</button>
+    </div>
+    <div id="q-info" style="font-size:11px;color:var(--dim);margin-top:7px">—</div>
+  </div>
+  <div class="h">状态</div>
+  <div class="b">
+    <div id="stat" style="font-size:11.5px;color:var(--sub);line-height:1.7">—</div>
+  </div>
+</div>
+
+<div id="btm">
+  <span class="kbd-hint"><kbd>左键</kbd>转视角</span>
+  <span class="kbd-hint"><kbd>右键</kbd>平移</span>
+  <span class="kbd-hint"><kbd>滚轮</kbd>变焦</span>
+  <span class="kbd-hint"><kbd>WASD</kbd>/<kbd>方向键</kbd>移动</span>
+  <span class="kbd-hint"><kbd>空格</kbd>升 <kbd>Ctrl</kbd>降 <kbd>Shift</kbd>加速</span>
+  <span class="kbd-hint"><kbd>1</kbd>~<kbd>6</kbd> 切图 · <kbd>F</kbd> 聚焦</span>
+  <span class="touch-hint">单指转视角 · 双指平移/缩放</span>
+</div>
+
+<div id="sheet-handle">控制面板</div>
+<div id="rotate-tip">
+  <div class="ico">📱</div>
+  <div>请横屏使用<br><span style="font-size:11px;color:#586476">横屏视野更宽,操控更方便</span></div>
+</div>
+<div id="stick">
+  <div class="base"></div>
+  <div class="knob" id="stick-knob"></div>
+</div>
+<div id="vbtn">
+  <button id="vb-up" title="上升">▲</button>
+  <button id="vb-down" title="下降">▼</button>
+</div>
+<div id="hud"></div>
+<div id="load"><div class="box">
+  <div class="t" id="ld-t">加载中…</div>
+  <div class="bar"><i id="ld-bar"></i></div>
+  <div class="p" id="ld-p">0%</div>
+</div></div>
+<div id="err"></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" }}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ══════════════════════════════════════════════════════════════
+   配置
+   ══════════════════════════════════════════════════════════════ */
+const MAPS = [
+  { file: 'changgongxigu.bin', name: '长弓溪谷', key: '3' },
+  { file: 'linghaodaba.bin',   name: '零号大坝', key: '5' },
+  { file: 'hangtianjidi.bin',  name: '航天基地', key: '4' },
+  { file: 'az3.bin',           name: 'AZ3',      key: '1' },
+  { file: 'bakeshen.bin',      name: '巴别神',   key: '2' },
+  { file: 'lobby.bin',         name: '大厅',     key: '6' },
+];
+const ROOT = '../Physx/';
+
+/* 地形摆放 —— 离线求解(建筑底面高度 vs 脚下地形高度 相关性最高者) */
+const TERRAIN = {
+  // 由 fine_fit.py 离线求解(修正单位换算后):朝向 + 平移(游戏坐标,厘米)
+  'changgongxigu.bin': { orient: 5, tx: -137450, ty:    7565, corr: .52 },
+  'linghaodaba.bin':   { orient: 7, tx: -149312, ty: -120248, corr: .59 },
+  'hangtianjidi.bin':  { orient: 2, tx:  -68708, ty: -122436, corr: .25 },
+};
+
+const CELL = 200;         // 地形每格厘米(离线验证值,非文件头写的 100)
+const BLOCK = 6;          // 建筑空间分块:6x6,兼顾剔除与 draw call
+const TERRAIN_STEP = 2;   // 地形降采样步长(2 -> 三角面降到 1/4)
+
+/* ══════════════════════════════════════════════════════════════
+   TIMEPX01 解析
+   ══════════════════════════════════════════════════════════════ */
+const TILE_STRIDE = 127 * 127 * 3 + 24;
+const XF_STRIDE = 48;
+
+function parseBin(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const n = b.byteLength;
+  if (String.fromCharCode(...b.subarray(0, 8)) !== 'TIMEPX01') throw new Error('不是 TIMEPX01 文件');
+
+  const nXf = dv.getUint32(12, true), nHull = dv.getUint32(16, true), nTile = dv.getUint32(20, true);
+
+  const hulls = [];
+  let p = 64;
+  while (p + 12 <= n) {
+    const vc = dv.getUint32(p, true), tc = dv.getUint32(p + 4, true), fl = dv.getUint32(p + 8, true);
+    if (!vc || vc > 2e6 || tc > 4e6 || fl > 0xFFFF) break;
+    const vs = p + 12, ve = vs + vc * 12, ie = ve + tc * 6;
+    if (ie > n) break;
+    let bad = false;
+    for (let i = 0, o = ve; i < tc * 3; i++, o += 2) if (dv.getUint16(o, true) >= vc) { bad = true; break; }
+    if (bad) break;
+    const verts = new Float32Array(vc * 3);
+    for (let i = 0, o = vs; i < verts.length; i++, o += 4) {
+      const v = dv.getFloat32(o, true);
+      verts[i] = (v > -1e7 && v < 1e7) ? v : 0;
+    }
+    const idx = new Uint16Array(tc * 3);
+    for (let i = 0, o = ve; i < idx.length; i++, o += 2) idx[i] = dv.getUint16(o, true);
+    hulls.push({ verts, idx });
+    p = ie;
+  }
+
+  const tiles = [];
+  while (p + TILE_STRIDE <= n) {
+    const nx = dv.getUint32(p, true), nz = dv.getUint32(p + 4, true), sc = dv.getFloat32(p + 8, true);
+    if (nx !== 127 || nz !== 127 || !(sc > 1e-4 && sc < 1e4)) break;
+    const body = p + 24;
+    const hgt = new Uint16Array(127 * 127);
+    for (let i = 0; i < hgt.length; i++) hgt[i] = dv.getUint16(body + i * 2, true);
+    tiles.push({ hgt, scale: sc });
+    p += TILE_STRIDE;
+  }
+
+  const trStart = n - nXf * XF_STRIDE;
+  const xf = {
+    quat: new Float32Array(nXf * 4), pos: new Float32Array(nXf * 3),
+    scl: new Float32Array(nXf * 3), hull: new Uint32Array(nXf),
+  };
+  for (let i = 0; i < nXf; i++) {
+    const o = trStart + i * XF_STRIDE;
+    for (let k = 0; k < 4; k++) xf.quat[i * 4 + k] = dv.getFloat32(o + k * 4, true);
+    for (let k = 0; k < 3; k++) xf.pos[i * 3 + k] = dv.getFloat32(o + 16 + k * 4, true);
+    for (let k = 0; k < 3; k++) xf.scl[i * 3 + k] = dv.getFloat32(o + 28 + k * 4, true);
+    xf.hull[i] = dv.getUint32(o + 40, true);
+  }
+  return { hulls, tiles, xf, counts: { nXf, nHull, nTile } };
+}
+
+function quatBasis(q, i) {
+  const x = q[i], y = q[i + 1], z = q[i + 2], w = q[i + 3];
+  let n2 = x * x + y * y + z * z + w * w;
+  if (n2 < 1e-12) n2 = 1;
+  const s = 2 / n2;
+  return [
+    1 - s * (y * y + z * z), s * (x * y - w * z),     s * (x * z + w * y),
+    s * (x * y + w * z),     1 - s * (x * x + z * z), s * (y * z - w * x),
+    s * (x * z - w * y),     s * (y * z + w * x),     1 - s * (x * x + y * y),
+  ];
+}
+
+/* 解瓦片网格:相邻瓦片对应边完全一致则相邻
+   边定义 L=列0 R=列126 B=行0 T=行126
+   方向表:i 的 T 接 j 的 B => j 在 i 上方(+1) */
+function solveLayout(tiles) {
+  const n = tiles.length;
+  const mk = (h, w) => {
+    const o = new Uint16Array(127);
+    for (let i = 0; i < 127; i++) {
+      o[i] = w === 0 ? h[i * 127] : w === 1 ? h[i * 127 + 126] : w === 2 ? h[i] : h[126 * 127 + i];
+    }
+    return o;
+  };
+  const E = tiles.map(t => [mk(t.hgt, 0), mk(t.hgt, 1), mk(t.hgt, 2), mk(t.hgt, 3)]);
+  const eq = (a, b) => { for (let i = 0; i < 127; i++) if (a[i] !== b[i]) return false; return true; };
+  const DIRS = [[3, 2, 0, 1], [2, 3, 0, -1], [1, 0, 1, 0], [0, 1, -1, 0]];
+
+  const pos = new Map([[0, [0, 0]]]);
+  const seen = new Set([0]);
+  const st = [0];
+  while (st.length) {
+    const i = st.pop(), [px, py] = pos.get(i);
+    for (let j = 0; j < n; j++) {
+      if (seen.has(j)) continue;
+      for (const [a, b2, dx, dy] of DIRS) {
+        if (eq(E[i][a], E[j][b2])) { pos.set(j, [px + dx, py + dy]); seen.add(j); st.push(j); break; }
+      }
+    }
+  }
+  return pos;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   场景
+   ══════════════════════════════════════════════════════════════ */
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const _gl = renderer.getContext();
+const _dbg = _gl.getExtension('WEBGL_debug_renderer_info');
+const gpuName = _dbg ? _gl.getParameter(_dbg.UNMASKED_RENDERER_WEBGL) : 'unknown';
+// 只留显卡型号
+const shortGpu = (() => {
+  const m = /(NVIDIA|AMD|Intel|Apple|Qualcomm|Mali|Adreno)[^,()]*/i.exec(gpuName);
+  return m ? m[0].trim().slice(0, 28) : gpuName.slice(0, 28);
+})();
+console.log('[GPU]', gpuName);
+
+// 软件渲染检测:Microsoft Basic Render / WARP / SwiftShader / llvmpipe
+// 都是「用 CPU 画图」,性能差几十倍,必须自动降配。
+const softGL = /Basic Render|WARP|SwiftShader|llvmpipe|Software/i.test(gpuName);
+if (softGL) console.warn('[GPU] 检测到软件渲染,已自动切到最低画质。请开启浏览器硬件加速以恢复性能。');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0d13);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 1, 2e7);
+camera.rotation.order = 'YXZ';
+
+const cam = { yaw: 0, pitch: -0.5, minP: -1.5, maxP: 1.5, rot: 0.0028, vh: 0.10, vv: 0.05, boost: 4 };
+/* 相机速度倍率:用户可调。基准值固定,改动只作用于倍率,方便恢复默认。 */
+const CAM_BASE = { rot: 0.0028, vh: 0.10, vv: 0.05 };
+const camMul = { rot: 1, vh: 1, vv: 1 };
+function applyCamMul() {
+  cam.rot = CAM_BASE.rot * camMul.rot;
+  cam.vh  = CAM_BASE.vh  * camMul.vh;
+  cam.vv  = CAM_BASE.vv  * camMul.vv;
+  // 触控设备的基准本身就不同,倍率要叠加在触控基准上
+  if (isTouch) {
+    cam.rot = CAM_BASE.rot * 1.96 * camMul.rot;
+    cam.vh  = CAM_BASE.vh  * 1.6  * camMul.vh;
+    cam.vv  = CAM_BASE.vv  * 1.6  * camMul.vv;
+  }
+}
+const setCamRot = () => {
+  cam.pitch = Math.max(cam.minP, Math.min(cam.maxP, cam.pitch));
+  camera.rotation.set(cam.pitch, cam.yaw, 0);
+};
+setCamRot();
+
+scene.add(new THREE.HemisphereLight(0xdcebff, 0x404a5a, 1.9));
+const dl = new THREE.DirectionalLight(0xffffff, 1.8); dl.position.set(0.6, 1.2, 0.4); scene.add(dl);
+const dl2 = new THREE.DirectionalLight(0x8ab4ff, 0.55); dl2.position.set(-0.8, 0.5, -0.6); scene.add(dl2);
+
+/* 游戏坐标 Z-up -> three Y-up */
+const root = new THREE.Group();
+root.rotation.x = -Math.PI / 2;
+scene.add(root);
+
+/* 镜像层:游戏地图与导出的 Y 轴相反,在这里统一翻转。
+   建筑/地形/标注都挂在这层下,保证三者一致翻转。 */
+const mirror = new THREE.Group();
+mirror.scale.y = -1;              // 局部 Y = 游戏 Y(水平),取反即为镜像
+root.add(mirror);
+
+const matWire  = new THREE.MeshBasicMaterial({ color: 0x74b4ee, wireframe: true });
+// flatShading:面法线由着色器求导算出,省掉 normal 属性(建筑几何没算法线)
+const matSolid = new THREE.MeshLambertMaterial({ color: 0xc8dcf0, flatShading: true });
+const matTerm  = new THREE.MeshLambertMaterial({ color: 0x33523f, side: THREE.DoubleSide });
+const matEdge  = new THREE.LineBasicMaterial({ color: 0x0a1420, transparent: true, opacity: 0.55 });
+
+let data = null, buildGrp = null, termGrp = null, entGrp = null;
+let wire = false, edgeOn = false;   // do not default-enable edges; too heavy on soft GL   // 默认实体:实测比线框更轻(碎块被过滤掉)
+let cur = -1, curFile = '';
+const state = { world: null, gameBox: null };
+const el = id => document.getElementById(id);
+
+/* ══════════════════════════════════════════════════════════════
+   建筑:8×6 空间分块 × 块内按 hull 分组合并
+   每块独立包围球 -> 视锥剔除生效;块内合并 -> draw call 可控
+   ══════════════════════════════════════════════════════════════ */
+function buildBuildings(S) {
+  const { hulls, xf } = S;
+  const n = xf.hull.length;
+
+  const bmin = [], bmax = [];
+  for (let h = 0; h < hulls.length; h++) {
+    const v = hulls[h].verts;
+    let a0 = 1e18, a1 = 1e18, a2 = 1e18, b0 = -1e18, b1 = -1e18, b2 = -1e18;
+    for (let k = 0; k < v.length; k += 3) {
+      const x = v[k], y = v[k + 1], z = v[k + 2];
+      if (x < a0) a0 = x; if (x > b0) b0 = x;
+      if (y < a1) a1 = y; if (y > b1) b1 = y;
+      if (z < a2) a2 = z; if (z > b2) b2 = z;
+    }
+    bmin.push([a0, a1, a2]); bmax.push([b0, b1, b2]);
+  }
+
+  const insts = [];
+  let x0 = 1e18, x1 = -1e18, y0 = 1e18, y1 = -1e18;
+  for (let i = 0; i < n; i++) {
+    const h = xf.hull[i];
+    if (h >= hulls.length) continue;
+    const sx = Math.abs(xf.scl[i * 3]), sy = Math.abs(xf.scl[i * 3 + 1]), sz = Math.abs(xf.scl[i * 3 + 2]);
+    const dx = (bmax[h][0] - bmin[h][0]) * sx;
+    const dy = (bmax[h][1] - bmin[h][1]) * sy;
+    const dz = (bmax[h][2] - bmin[h][2]) * sz;
+    const diag = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (diag > 40000) continue;                     // 全图包围盒占位
+    const px = xf.pos[i * 3], py = xf.pos[i * 3 + 1];
+    insts.push({ i, h, diag, px, py });
+    if (px < x0) x0 = px; if (px > x1) x1 = px;
+    if (py < y0) y0 = py; if (py > y1) y1 = py;
+  }
+  const grp = new THREE.Group();
+  grp.name = 'buildings';
+  if (!insts.length) return grp;
+
+  const w = Math.max(x1 - x0, 1), hgt = Math.max(y1 - y0, 1);
+  const cells = new Map();
+  for (const it of insts) {
+    const bx = Math.min(BLOCK - 1, Math.max(0, Math.floor((it.px - x0) / (w / BLOCK))));
+    const by = Math.min(BLOCK - 1, Math.max(0, Math.floor((it.py - y0) / (hgt / BLOCK))));
+    const k = bx + ',' + by;
+    let a = cells.get(k); if (!a) { a = []; cells.set(k, a); }
+    a.push(it);
+  }
+
+  // 每块内按三角形预算合并成少数几个网格:
+  //   - 每块一个独立包围球 -> 视锥剔除生效
+  //   - 块内合并 -> draw call 可控(不是每个 hull 一个网格)
+  const BUDGET = 60000;                 // 每个网格最多约 6 万三角
+  for (const list of cells.values()) {
+    // 大块优先,让小面数碎块也能一起塞进同一个网格
+    list.sort((a, b) => b.diag - a.diag);
+
+    let pos = [], idx = [], tri = 0, voff = 0, mxDiag = 0;
+
+    const flush = () => {
+      if (!tri) return;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pos), 3));
+      g.setIndex(new THREE.BufferAttribute(new Uint32Array(idx), 1));
+      g.computeBoundingSphere();
+      const m = new THREE.Mesh(g, matWire);
+      m.userData.diag = mxDiag;
+      grp.add(m);
+      pos = []; idx = []; tri = 0; voff = 0; mxDiag = 0;
+    };
+
+    for (const it of list) {
+      const H = hulls[it.h];
+      const vc = H.verts.length / 3;
+      const tcount = H.idx.length / 3;
+      if (tri && tri + tcount > BUDGET) flush();
+      if (it.diag > mxDiag) mxDiag = it.diag;
+
+      const e = quatBasis(xf.quat, it.i * 4);
+      const px = xf.pos[it.i * 3], py = xf.pos[it.i * 3 + 1], pz = xf.pos[it.i * 3 + 2];
+      const sx = Math.abs(xf.scl[it.i * 3]), sy = Math.abs(xf.scl[it.i * 3 + 1]), sz = Math.abs(xf.scl[it.i * 3 + 2]);
+      for (let k = 0; k < vc; k++) {
+        const x = H.verts[k * 3] * sx, y = H.verts[k * 3 + 1] * sy, z = H.verts[k * 3 + 2] * sz;
+        pos.push(
+          e[0] * x + e[1] * y + e[2] * z + px,
+          e[3] * x + e[4] * y + e[5] * z + py,
+          e[6] * x + e[7] * y + e[8] * z + pz);
+      }
+      for (let k = 0; k < H.idx.length; k++) idx.push(H.idx[k] + voff);
+      voff += vc;
+      tri += tcount;
+    }
+    flush();
+  }
+  return grp;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   地形:按瓦片分块,朝向/平移由离线求解给出
+   ══════════════════════════════════════════════════════════════ */
+function buildTerrain(S, lay) {
+  const T = S.tiles;
+  if (!T.length) return null;
+  const N = 127, SPAN = N - 1;
+  const STEP = TERRAIN_STEP;
+  const ns = Math.floor(SPAN / STEP) + 1;      // 每片降采样后的采样点数
+
+  // 有效瓦片 + 全局高度基准
+  const valid = [];
+  const allv = [];
+  for (const [ti, [c, r]] of lay) {
+    const h = T[ti].hgt;
+    let cnt = 0;
+    for (let k = 0; k < h.length; k += 5) { const v = h[k]; if (v > 500 && v < 65000) { allv.push(v); cnt++; } }
+    if (cnt < 50) continue;
+    valid.push([ti, c, r]);
+  }
+  if (!valid.length) return null;
+  allv.sort((a, b) => a - b);
+  const BASE = allv[allv.length >> 1];
+
+  let minC = 1e9, maxC = -1e9, minR = 1e9, maxR = -1e9;
+  for (const [, c, r] of valid) {
+    if (c < minC) minC = c; if (c > maxC) maxC = c;
+    if (r < minR) minR = r; if (r > maxR) maxR = r;
+  }
+  const GW = maxC - minC + 1, GH = maxR - minR + 1;
+  const Wd = GW * ns, Hd = GH * ns;             // 降采样后的总格数
+  const RES = CELL * STEP;                      // 每个降采样格的世界尺寸
+
+  const fit = TERRAIN[curFile] || { orient: 0, tx: 0, ty: 0 };
+  const o = fit.orient | 0;
+
+  /* 朝向:输入降采样格索引 (gx,gy) 与总格数 (Wd,Hd),输出朝向后的格索引。
+     与离线求解脚本 fine_fit.py 的 terrain_pts() 保持一致。 */
+  const orient = (gx, gy) => {
+    switch (o) {
+      case 1: return [Wd - 1 - gx, gy];
+      case 2: return [gx, Hd - 1 - gy];
+      case 3: return [Wd - 1 - gx, Hd - 1 - gy];
+      case 4: return [gy, gx];
+      case 5: return [Hd - 1 - gy, gx];
+      case 6: return [gy, Wd - 1 - gx];
+      case 7: return [Hd - 1 - gy, Wd - 1 - gx];
+      default: return [gx, gy];
+    }
+  };
+
+  const grp = new THREE.Group();
+  grp.name = 'terrain';
+
+  for (const [ti, c, r] of valid) {
+    const gc = c - minC, gr = r - minR;
+    const h = T[ti].hgt, sc = T[ti].scale;
+    const pos = new Float32Array(ns * ns * 3);
+    const idx = new Uint32Array((ns - 1) * (ns - 1) * 6);
+    let ip = 0, ii = 0;
+
+    for (let jz = 0; jz < ns; jz++) {
+      const iz = Math.min(SPAN, jz * STEP);
+      for (let jx = 0; jx < ns; jx++) {
+        const ix = Math.min(SPAN, jx * STEP);
+        const [gX, gY] = orient(gc * ns + jx, gr * ns + jz);
+        const raw = h[ix * N + iz];
+        const hy = (raw > 500 && raw < 65000) ? (raw - BASE) * sc : 0;
+        pos[ip++] = gX * RES + fit.tx;
+        pos[ip++] = gY * RES + fit.ty;
+        pos[ip++] = hy;
+      }
+    }
+    for (let jz = 0; jz < ns - 1; jz++) {
+      for (let jx = 0; jx < ns - 1; jx++) {
+        const a = jz * ns + jx, b = a + 1, c2 = a + ns, d = c2 + 1;
+        idx[ii++] = a; idx[ii++] = c2; idx[ii++] = b;
+        idx[ii++] = b; idx[ii++] = c2; idx[ii++] = d;
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
+    grp.add(new THREE.Mesh(g, matTerm));
+  }
+  return grp;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   标注
+   ══════════════════════════════════════════════════════════════ */
+const ENT = {
+  ally:  { c: 0x35d07f, k: 1.0 },
+  enemy: { c: 0xff4d5e, k: 1.0 },
+  loot:  { c: 0xffc44d, k: 0.6 },
+  obj:   { c: 0xc07bff, k: 1.4 },
+};
+let entR = 300;
+
+function buildEntities() {
+  if (entGrp) { root.remove(entGrp); entGrp.traverse(o => o.geometry && o.geometry.dispose()); }
+  entGrp = new THREE.Group();
+  entGrp.name = 'entities';
+  for (const k of Object.keys(ENT)) {
+    const geo = new THREE.SphereGeometry(entR * ENT[k].k, 8, 6);
+    const im = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: ENT[k].c }), 400);
+    im.count = 0; im.frustumCulled = false; im.userData.kind = k;
+    entGrp.add(im);
+  }
+  mirror.add(entGrp);
+}
+const _dm = new THREE.Object3D();
+function setEntities(list) {
+  if (!entGrp) return;
+  const by = {};
+  for (const k of Object.keys(ENT)) by[k] = [];
+  for (const e of list) (by[e.kind] || by.loot).push(e);
+  for (const im of entGrp.children) {
+    const arr = by[im.userData.kind] || [];
+    im.count = Math.min(arr.length, im.instanceMatrix.count);
+    for (let i = 0; i < im.count; i++) {
+      const e = arr[i];
+      _dm.position.set(e.x, e.y, e.z + entR);
+      _dm.updateMatrix();
+      im.setMatrixAt(i, _dm.matrix);
+    }
+    im.instanceMatrix.needsUpdate = true;
+  }
+}
+/* 对外接口:喂游戏坐标(厘米,Z 向上) */
+window.GameMap = {
+  push(list) { setEntities(list); },
+  clear() { setEntities([]); },
+};
+
+function testData() {
+  const g = state.gameBox;
+  if (!g) return [];
+  const out = [];
+  const add = (k, cnt) => {
+    for (let i = 0; i < cnt; i++) out.push({
+      kind: k,
+      x: g.min.x + Math.random() * (g.max.x - g.min.x),
+      y: g.min.y + Math.random() * (g.max.y - g.min.y),
+      z: g.min.z + Math.random() * (g.max.z - g.min.z),
+    });
+  };
+  add('enemy', 8); add('ally', 4); add('loot', 12); add('obj', 3);
+  return out;
+}
+let testTimer = null;
+function startTest(on) {
+  if (testTimer) { clearInterval(testTimer); testTimer = null; }
+  if (on) { setEntities(testData()); testTimer = setInterval(() => setEntities(testData()), 1500); }
+  else setEntities([]);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   输入
+   ══════════════════════════════════════════════════════════════ */
+const canvas = renderer.domElement;
+canvas.style.touchAction = 'none';
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+const keys = new Set();
+const MOVE = new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',
+                      'Space','ControlLeft','ControlRight','ShiftLeft','ShiftRight']);
+const ptrs = new Map();
+let drag = null, lastX = 0, lastY = 0, pinch = 0;
+
+/* 虚拟摇杆:左拇指控制移动(相对相机朝向),右拇指拖动转视角 */
+const stick = { active: false, id: null, x: 0, y: 0 };   // x,y ∈ [-1,1]
+const vkeys = { up: false, down: false };               // 升降按钮
+
+/* ---------- 虚拟摇杆 ---------- */
+(function initStick() {
+  const el2 = document.getElementById('stick');
+  const knob = document.getElementById('stick-knob');
+  if (!el2 || !knob) return;
+  const R = 34;                     // 摇杆最大位移(像素)
+
+  const setKnob = (dx, dy) => {
+    knob.style.transform = `translate(${dx}px,${dy}px)`;
+  };
+  const reset = () => {
+    stick.active = false; stick.id = null; stick.x = 0; stick.y = 0;
+    setKnob(0, 0);
+  };
+
+  el2.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    stick.active = true; stick.id = e.pointerId;
+    try { el2.setPointerCapture(e.pointerId); } catch (_) {}
+    move(e);
+  });
+  el2.addEventListener('pointermove', e => {
+    if (!stick.active || e.pointerId !== stick.id) return;
+    e.preventDefault();
+    move(e);
+  });
+  const end = e => { if (e.pointerId === stick.id) reset(); };
+  el2.addEventListener('pointerup', end);
+  el2.addEventListener('pointercancel', end);
+
+  function move(e) {
+    const b = el2.getBoundingClientRect();
+    let dx = e.clientX - (b.left + b.width / 2);
+    let dy = e.clientY - (b.top + b.height / 2);
+    const len = Math.hypot(dx, dy);
+    if (len > R) { dx = dx / len * R; dy = dy / len * R; }
+    setKnob(dx, dy);
+    stick.x = dx / R;               // 右为正
+    stick.y = -dy / R;              // 上为正(屏幕 y 向下)
+  }
+
+  // 升降按钮
+  const bind = (id, key) => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    const on = e => { e.preventDefault(); vkeys[key] = true; b.classList.add('on'); };
+    const off = () => { vkeys[key] = false; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', on);
+    b.addEventListener('pointerup', off);
+    b.addEventListener('pointercancel', off);
+    b.addEventListener('pointerleave', off);
+  };
+  bind('vb-up', 'up');
+  bind('vb-down', 'down');
+})();
+
+canvas.addEventListener('pointerdown', e => {
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  // 单指时才捕获。多指手势下 setPointerCapture 会把后续事件都锁给第一个指针,
+  // 导致第二根手指收不到 move,捏合/双指平移失效。
+  if (ptrs.size === 1) { try { canvas.setPointerCapture(e.pointerId); } catch (_) {} }
+  if (ptrs.size === 1) {
+    drag = (e.pointerType === 'mouse' && e.button === 2) ? 'pan' : 'look';
+    lastX = e.clientX; lastY = e.clientY;
+  } else if (ptrs.size === 2) {
+    drag = 'pan';
+    const [a, b] = [...ptrs.values()];
+    pinch = Math.hypot(a.x - b.x, a.y - b.y);
+    lastX = (a.x + b.x) / 2; lastY = (a.y + b.y) / 2;
+  }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return;
+  const prev = ptrs.get(e.pointerId);
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size >= 2) {
+    const [a, b] = [...ptrs.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch > 0) zoom(1 / (d / pinch));
+    pinch = d;
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+    pan(cx - lastX, cy - lastY);
+    lastX = cx; lastY = cy;
+    return;
+  }
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  if (drag === 'pan') pan(dx, dy); else look(dx, dy);
+});
+const up = e => {
+  ptrs.delete(e.pointerId);
+  try { canvas.releasePointerCapture?.(e.pointerId); } catch (_) {}
+  if (!ptrs.size) { drag = null; pinch = 0; }
+  else if (ptrs.size === 1) { const [a] = [...ptrs.values()]; lastX = a.x; lastY = a.y; pinch = 0; }
+};
+canvas.addEventListener('pointerup', up);
+canvas.addEventListener('pointercancel', up);
+canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(1 + Math.sign(e.deltaY) * 0.1); }, { passive: false });
+
+function look(dx, dy) { cam.yaw -= dx * cam.rot; cam.pitch -= dy * cam.rot; setCamRot(); }
+const _pf = new THREE.Vector3(), _pr = new THREE.Vector3();
+function pan(dx, dy) {
+  if (!state.world) return;
+  const s = state.world.getSize(new THREE.Vector3());
+  const k = Math.max(s.x, s.z, 1) / innerHeight * 1.4;
+  camera.getWorldDirection(_pf);
+  _pr.crossVectors(_pf, camera.up).normalize();
+  camera.position.addScaledVector(_pr, -dx * k).addScaledVector(camera.up, dy * k);
+}
+function zoom(k) { camera.fov = Math.max(12, Math.min(100, camera.fov * k)); camera.updateProjectionMatrix(); }
+
+addEventListener('keydown', e => {
+  if (MOVE.has(e.code)) { keys.add(e.code); e.preventDefault(); }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const M = MAPS.find(m => m.key === e.key);
+  if (M) { load(MAPS.indexOf(M)); return; }
+  if (e.key === 'f' || e.key === 'F') fit();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+
+function applyMove(dt) {
+  if (!state.world) return;
+  // 虚拟摇杆:以相机朝向为基准移动。推得越远越快(标准摇杆手感)
+  const mag = Math.hypot(stick.x, stick.y);
+  if (stick.active && mag > 0.06) {
+    const s0 = state.world.getSize(new THREE.Vector3());
+    const vh = Math.max(s0.x, s0.z, 1) * cam.vh * dt * Math.min(mag, 1);
+    const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+    const fx = -sy, fz = -cy, rx = cy, rz = -sy;
+    // 归一化方向 × 幅度
+    const nx = (fx * stick.y + rx * stick.x) / mag;
+    const nz = (fz * stick.y + rz * stick.x) / mag;
+    camera.position.x += nx * vh;
+    camera.position.z += nz * vh;
+  }
+  // 升降按钮
+  if (vkeys.up || vkeys.down) {
+    const s0 = state.world.getSize(new THREE.Vector3());
+    const vv = Math.max(s0.y, s0.x * 0.3, 1) * cam.vv * dt;
+    camera.position.y += (vkeys.up ? 1 : 0) * vv - (vkeys.down ? 1 : 0) * vv;
+  }
+  if (!keys.size) return;
+  const s = state.world.getSize(new THREE.Vector3());
+  const bo = (keys.has('ShiftLeft') || keys.has('ShiftRight')) ? cam.boost : 1;
+  const vh = Math.max(s.x, s.z, 1) * cam.vh * bo * dt;
+  const vv = Math.max(s.y, s.x * 0.3, 1) * cam.vv * bo * dt;
+  const sy = Math.sin(cam.yaw), cy = Math.cos(cam.yaw);
+  const fx = -sy, fz = -cy, rx = cy, rz = -sy;
+  let dx = 0, dz = 0, dy = 0;
+  if (keys.has('KeyW') || keys.has('ArrowUp'))    { dx += fx; dz += fz; }
+  if (keys.has('KeyS') || keys.has('ArrowDown'))  { dx -= fx; dz -= fz; }
+  if (keys.has('KeyD') || keys.has('ArrowRight')) { dx += rx; dz += rz; }
+  if (keys.has('KeyA') || keys.has('ArrowLeft'))  { dx -= rx; dz -= rz; }
+  if (keys.has('Space')) dy += 1;
+  if (keys.has('ControlLeft') || keys.has('ControlRight')) dy -= 1;
+  const L = Math.hypot(dx, dz);
+  if (L > 0) { camera.position.x += dx / L * vh; camera.position.z += dz / L * vh; }
+  if (dy) camera.position.y += dy * vv;
+}
+
+const _cv = new THREE.Vector3();
+
+/* ══════════════════════════════════════════════════════════════
+   加载
+   ══════════════════════════════════════════════════════════════ */
+async function fetchBin(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status} — ${url}`);
+  const len = +(r.headers.get('Content-Length') || 0);
+  if (!r.body || !len) return new Uint8Array(await r.arrayBuffer());
+  const rd = r.body.getReader();
+  const ch = []; let got = 0;
+  const _ldT0 = performance.now();
+  for (;;) {
+    const { done, value } = await rd.read();
+    if (done) break;
+    ch.push(value); got += value.length;
+    const pc = Math.round(got / len * 100);
+    el('ld-bar').style.width = pc + '%';
+    // 移动端网络慢,给出速度和预估剩余
+    const t = (performance.now() - _ldT0) / 1000;
+    const speed = t > 0.3 ? got / t : 0;
+    let extra = '';
+    if (speed > 1000) {
+      const eta = (len - got) / speed;
+      extra = ' · ' + (speed / 1048576).toFixed(1) + 'MB/s';
+      if (isFinite(eta) && eta > 1) extra += ' · 剩余 ' + Math.ceil(eta) + 's';
+    }
+    el('ld-p').textContent = pc + '% · ' + (got / 1048576).toFixed(1) +
+      ' / ' + (len / 1048576).toFixed(1) + ' MB' + extra;
+  }
+  const out = new Uint8Array(got); let q = 0;
+  for (const c of ch) { out.set(c, q); q += c.length; }
+  return out;
+}
+
+async function load(idx) {
+  if (idx === cur) return;
+  cur = idx;
+  const M = MAPS[idx];
+  curFile = M.file;
+  [...el('list').children].forEach((c, i) => c.classList.toggle('on', i === idx));
+  el('load').classList.add('show');
+  el('err').classList.remove('show');
+  el('ld-t').textContent = '读取 ' + M.name;
+
+  try {
+    const buf = await fetchBin(ROOT + M.file);
+    el('ld-t').textContent = '解析 …';
+    await new Promise(r => setTimeout(r, 0));
+    const t0 = performance.now();
+    data = parseBin(buf);
+    const lay = solveLayout(data.tiles);
+    const dtP = Math.round(performance.now() - t0);
+
+    disposeEdges();                       // 释放上一张图的描边
+    for (const g of [buildGrp, termGrp, entGrp]) {
+      if (!g) continue;
+      mirror.remove(g);
+      g.traverse(o => o.geometry && o.geometry.dispose());
+    }
+    buildGrp = termGrp = entGrp = null;
+
+    buildGrp = buildBuildings(data);
+    mirror.add(buildGrp);
+    termGrp = buildTerrain(data, lay);
+    if (termGrp) { mirror.add(termGrp); termGrp.visible = el('s-term').classList.contains('on'); }
+
+    root.position.set(0, 0, 0);
+    root.updateMatrixWorld(true);
+
+    alignTerrain();          // 必须在整体居中之前
+
+    // 再整体居中
+    const box = new THREE.Box3().setFromObject(buildGrp);
+    if (termGrp && termGrp.children.length) box.union(new THREE.Box3().setFromObject(termGrp));
+    const c = box.getCenter(new THREE.Vector3());
+    root.position.set(-c.x, -c.y, -c.z);
+    root.updateMatrixWorld(true);
+
+    const sz = box.getSize(new THREE.Vector3());
+    state.world = new THREE.Box3(
+      new THREE.Vector3(-sz.x / 2, -sz.y / 2, -sz.z / 2),
+      new THREE.Vector3(sz.x / 2, sz.y / 2, sz.z / 2));
+    // 游戏坐标范围(把居中的根节点偏移加回去)
+    state.gameBox = new THREE.Box3().setFromObject(buildGrp);
+    state.gameBox.translate(c);
+
+    entR = Math.max(sz.x, sz.z) / 90;
+    buildEntities();
+    applyMat();
+
+    el('c-model').innerHTML = `<b>${M.name}</b> · ${(sz.x / 100).toFixed(0)}×${(sz.z / 100).toFixed(0)} m`;
+    el('c-stat').innerHTML = `<b>${data.counts.nHull.toLocaleString()}</b> 模板 · <b>${data.counts.nXf.toLocaleString()}</b> 实例 · 地形 ${data.tiles.length} 片 · 解析 ${dtP}ms`;
+    const f = TERRAIN[M.file];
+    el('stat').innerHTML = `地形摆放 orient=${f ? f.orient : '-'} ` +
+      `(${f ? '相关 ' + f.corr.toFixed(2) : '未解'})<br>` +
+      `建筑块 ${buildGrp.children.length} · 地形片 ${termGrp ? termGrp.children.length : 0}`;
+
+    fit();
+    startTest(el('s-test').classList.contains('on'));
+    el('load').classList.remove('show');
+  } catch (e) {
+    el('load').classList.remove('show');
+    el('err').textContent = '加载失败:' + M.name + '\n\n' + e.message + '\n\n' + (e.stack || '');
+    el('err').classList.add('show');
+    console.error(e);
+  }
+}
+
+/* 把地形对齐到建筑。
+   两个关键点:
+   1) root 绕 X 轴 -90°,所以 local(x,y,z) -> world(x, z, -y)。
+      termGrp.position 是在 local 空间,换算关系:
+        Δlocal_x = Δworld_x,  Δlocal_y = -Δworld_z,  Δlocal_z = Δworld_y
+   2) 水平面用「中心对齐」,高度用「地形中位高度 对齐 建筑底面中位高度」,
+      因为建筑有高有低,拿包围盒极值会被高楼/深坑带偏。 */
+const _bx = new THREE.Box3();
+function alignTerrain() {
+  if (!termGrp || !termGrp.children.length || !buildGrp) return;
+  termGrp.position.set(0, 0, 0);
+  termGrp.updateMatrixWorld(true);
+
+  // --- 建筑:底面高度中位(局部 Z 是高度,取每个网格包围盒的 min)---
+  const bases = [];
+  buildGrp.traverse(o => {
+    if (!o.isMesh || !o.geometry) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    const b = o.geometry.boundingBox;
+    if (b) bases.push(o.position.z + b.min.z);
+  });
+  bases.sort((a, b) => a - b);
+  const bBase = bases.length ? bases[Math.floor(bases.length * 0.15)] : 0;
+
+  // --- 水平:中心对齐 ---
+  _bx.setFromObject(buildGrp);
+  const bc = _bx.getCenter(new THREE.Vector3());
+  _bx.setFromObject(termGrp);
+  let tc = _bx.getCenter(new THREE.Vector3());
+  // mirror 层 scale.y = -1 时,local -> world 的映射是 (x,y,z) -> (x, z, y)
+  // 所以:Δlocal_x = Δworld_x,Δlocal_y = Δworld_z,Δlocal_z = Δworld_y
+  termGrp.position.x += bc.x - tc.x;
+  termGrp.position.y += bc.z - tc.z;
+  termGrp.updateMatrixWorld(true);
+
+  // --- 高度:地形局部 Z 中位 对齐 建筑底面 ---
+  const zs = [];
+  const collect = m => {
+    const a = m.geometry.attributes.position.array;
+    for (let i = 2; i < a.length; i += 3 * 31) zs.push(m.position.z + a[i]);
+  };
+  termGrp.children.forEach(collect);
+  zs.sort((a, b) => a - b);
+  const tMid = zs.length ? zs[zs.length >> 1] : 0;
+  termGrp.position.z += bBase - tMid;
+  termGrp.updateMatrixWorld(true);
+}
+
+/* 描边:用 EdgesGeometry 只保留夹角 > 阈值的棱,生成轮廓线。
+   线框材质和描边互斥(线框已经全是边)。 */
+/* 描边:机关几何棱角多,EdgesGeometry 在百万面上要 1~2 秒,
+   所以分批处理,过程中给个轻微提示,不至于看着像卡死。 */
+const EDGE_ANGLE = 60;          // 夹角阈值:越大线段越少
+let edgeBusy = false;
+function applyEdges() {
+  if (!buildGrp) return;
+  const want = edgeOn && !wire;
+
+  if (!want) {
+    for (const m of buildGrp.children) if (m.userData.edge) m.userData.edge.visible = false;
+    return;
+  }
+  // 已经建好 -> 直接显示
+  if (buildGrp.children[0] && buildGrp.children[0].userData.edge) {
+    for (const m of buildGrp.children) if (m.userData.edge) m.userData.edge.visible = true;
+    return;
+  }
+  if (edgeBusy) return;
+
+  // 分批生成,避免长时间阻塞
+  edgeBusy = true;
+  const list = buildGrp.children.filter(m => m.isMesh && !m.userData.edge);
+  const hint = el('hud');
+  const old = hint.innerHTML;
+  hint.innerHTML = '生成描边…';
+  let i = 0;
+  const step = () => {
+    if (!edgeOn || wire) {          // 中途被关掉了
+      edgeBusy = false; hint.innerHTML = old; return;
+    }
+    const t0 = performance.now();
+    // 每批最多 300ms,保证界面还有响应
+    while (i < list.length && performance.now() - t0 < 300) {
+      const m = list[i++];
+      const line = new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry, EDGE_ANGLE), matEdge);
+      line.userData.isEdge = true;
+      m.add(line);
+      m.userData.edge = line;
+    }
+    if (i < list.length) { setTimeout(step, 0); return; }
+    edgeBusy = false;
+    hint.innerHTML = old;
+  };
+  setTimeout(step, 0);
+}
+
+/* 释放描边资源(切换地图时) */
+function disposeEdges() {
+  if (!buildGrp) return;
+  for (const m of buildGrp.children) {
+    const e = m.userData.edge;
+    if (!e) continue;
+    m.remove(e);
+    e.geometry.dispose();
+    delete m.userData.edge;
+  }
+  edgeBusy = false;
+}
+
+/* 释放描边资源(切换地图或关闭时) */
+
+function applyMat() {
+  if (!buildGrp) return;
+  for (const m of buildGrp.children) {
+    m.material = wire ? matWire : matSolid;
+  }
+  applyEdges();
+}
+
+function fit() {
+  const b = new THREE.Box3();
+  if (buildGrp) b.expandByObject(buildGrp);
+  if (termGrp && termGrp.visible) b.expandByObject(termGrp);
+  if (b.isEmpty()) return;
+  const c = b.getCenter(new THREE.Vector3());
+  const s = b.getSize(new THREE.Vector3());
+  const r = Math.max(s.x, s.y, s.z) * 0.5;
+  const d = r / Math.sin(Math.PI * camera.fov / 360) * 1.1;
+  camera.up.set(0, 1, 0);
+  camera.position.set(c.x + d * 0.5, c.y + d * 0.75, c.z + d * 0.5);
+  camera.near = Math.max(r / 20000, 0.1);
+  camera.far = d * 45;
+  cam.yaw = Math.atan2(c.x - camera.position.x, c.z - camera.position.z) + Math.PI;
+  cam.pitch = Math.asin((c.y - camera.position.y) / Math.max(camera.position.distanceTo(c), 1e-6));
+  setCamRot();
+  camera.updateProjectionMatrix();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UI
+   ══════════════════════════════════════════════════════════════ */
+const list = el('list');
+MAPS.forEach((M, i) => {
+  const d = document.createElement('div');
+  d.className = 'item';
+  d.innerHTML = `<span class="dot"></span><span class="nm">${M.name}</span><span class="k">${M.key}</span>`;
+  d.onclick = () => load(i);
+  list.appendChild(d);
+});
+
+const sw = (id, fn) => {
+  const e = el(id);
+  e.onclick = () => { e.classList.toggle('on'); fn(e.classList.contains('on')); };
+};
+sw('s-build', v => { if (buildGrp) buildGrp.visible = v; });
+sw('s-term',  v => { if (termGrp) termGrp.visible = v; });
+sw('s-wire',  v => { wire = v; applyMat(); });
+sw('s-edge',  v => { edgeOn = v; applyEdges(); });
+sw('s-test',  v => { startTest(v); });
+['ally','enemy','loot','obj'].forEach(k => {
+  sw('s-' + k, v => {
+    if (!entGrp) return;
+    for (const im of entGrp.children) if (im.userData.kind === k) im.visible = v;
+  });
+});
+
+/* 画质:核心是像素比。填充率不够时降它最有效。 */
+const QUALITY = {
+  low:  { pr: 0.7,  label: '流畅' },
+  mid:  { pr: 1.0,  label: '标准' },
+  high: { pr: 1.5,  label: '高清' },
+};
+let quality = 'mid';
+function setQuality(q) {
+  if (!QUALITY[q]) return;
+  quality = q;
+  const pr = Math.min(QUALITY[q].pr, devicePixelRatio || 1);
+  renderer.setPixelRatio(pr);
+  renderer.setSize(innerWidth, innerHeight);
+  ['low', 'mid', 'high'].forEach(k => el('q-' + k).classList.toggle('on', k === q));
+  const g = renderer.getContext();
+  el('q-info').textContent =
+    `${g.drawingBufferWidth}×${g.drawingBufferHeight} (像素比 ${pr})`;
+  try { localStorage.setItem('dfQuality', q); } catch (_) {}
+}
+/* ---- 相机速度 ---- */
+// 先读回上次设置,再绑定滑条(否则界面显示会与真实值脱节)
+try {
+  const m = JSON.parse(localStorage.getItem('dfCamMul') || 'null');
+  if (m && typeof m === 'object') {
+    camMul.rot = +m.rot || 1; camMul.vh = +m.vh || 1; camMul.vv = +m.vv || 1;
+  }
+} catch (_) {}
+
+const mulToPct = m => Math.round(m * 100);
+function bindSpeed(id, vid, key) {
+  const s = el(id), v = el(vid);
+  if (!s) return;
+  const fmt = m => (m).toFixed(1) + '×';
+  s.value = mulToPct(camMul[key]);
+  v.textContent = fmt(camMul[key]);
+  s.addEventListener('input', () => {
+    camMul[key] = +s.value / 100;
+    v.textContent = fmt(camMul[key]);
+    applyCamMul();
+    try { localStorage.setItem('dfCamMul', JSON.stringify(camMul)); } catch (_) {}
+  });
+}
+bindSpeed('sp-h', 'sp-h-v', 'vh');
+bindSpeed('sp-v', 'sp-v-v', 'vv');
+bindSpeed('sp-r', 'sp-r-v', 'rot');
+
+el('sp-reset').onclick = () => {
+  camMul.rot = camMul.vh = camMul.vv = 1;
+  applyCamMul();
+  [['sp-h', 'sp-h-v', 'vh'], ['sp-v', 'sp-v-v', 'vv'], ['sp-r', 'sp-r-v', 'rot']]
+    .forEach(([i, vi, k]) => { el(i).value = 100; el(vi).textContent = '1.0×'; });
+  try { localStorage.setItem('dfCamMul', JSON.stringify(camMul)); } catch (_) {}
+};
+
+el('q-low').onclick  = () => setQuality('low');
+el('q-mid').onclick  = () => setQuality('mid');
+el('q-high').onclick = () => setQuality('high');
+
+/* ══════════════════════════════════════════════════════════════
+   移动端适配
+   ══════════════════════════════════════════════════════════════ */
+const isTouch = matchMedia('(pointer: coarse)').matches;
+const isSmall = () => innerWidth <= 820;
+
+// 触控设备的相机参数:手指比鼠标"粗",旋转要更灵敏、移动要更快
+applyCamMul();   // 触控设备在 applyCamMul 里已按倍率叠加
+
+// 底部抽屉折叠
+const sheet = el('sheet-handle');
+const panel = el('ctrl');
+if (sheet && panel) {
+  sheet.onclick = () => {
+    panel.classList.toggle('collapsed');
+    sheet.classList.toggle('down', panel.classList.contains('collapsed'));
+  };
+  // 移动端默认折叠,让画面占满
+  if (isSmall()) {
+    panel.classList.add('collapsed');
+    sheet.classList.add('down');
+  }
+}
+
+// 首次进入移动端:自动选一个稳妥的画质
+if (isTouch) {
+  const oldQ = (() => { try { return localStorage.getItem('dfQuality'); } catch (_) { return null; } })();
+  if (!oldQ) quality = 'low';        // 移动端默认流畅
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(QUALITY[quality].pr, devicePixelRatio || 1));
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ══════════════════════════════════════════════════════════════
+   主循环
+   ══════════════════════════════════════════════════════════════ */
+let fpsT = 0, fpsN = 0, lastT = 0;
+renderer.setAnimationLoop(t => {
+  try {
+    const now = t || performance.now();
+    const dt = lastT ? Math.min((now - lastT) / 1000, 0.1) : 0;
+    lastT = now;
+
+    applyMove(dt);
+    renderer.render(scene, camera);
+
+    fpsN++;
+    if (now - fpsT > 500) {
+      const fps = Math.round(fpsN * 1000 / (now - fpsT));
+      fpsT = now; fpsN = 0;
+      const ri = renderer.info.render;
+      const cls = fps < 20 ? 'bad' : fps < 45 ? 'warn' : '';
+      el('hud').innerHTML =
+        `FPS <b class="${cls}">${fps}</b> · 三角 <b>${(ri.triangles / 1000).toFixed(0)}k</b> · Draw <b>${ri.calls}</b><br>` +
+        `<span style="color:#586476">${_gl.drawingBufferWidth}×${_gl.drawingBufferHeight}` +
+        ` · MSAA ${_gl.getParameter(_gl.SAMPLES)} · GPU ${shortGpu}</span>`;
+    }
+  } catch (e) {
+    // 渲染循环里抛异常会中断整个循环(表现为彻底卡死)。
+    // 这里兜住:报一次错,继续渲染,不让页面死掉。
+    if (!window.__loopErr) {
+      window.__loopErr = true;
+      console.error('[渲染循环异常]', e);
+      const box = el('err');
+      box.textContent = '渲染循环异常(已继续运行):\n' + e.message;
+      box.classList.add('show');
+      setTimeout(() => box.classList.remove('show'), 4000);
+    }
+  }
+});
+window.__MAP = {
+  camera, cam, scene, renderer, keys, state,
+  get buildGrp() { return buildGrp; },
+  get termGrp() { return termGrp; },
+  get world() { return state.world; },
+  load, fit,
+};
+
+if (softGL) {
+  quality = 'low';                      // 软件渲染:强制最低画质
+} else {
+  try {
+    const q = localStorage.getItem('dfQuality');
+    if (q && QUALITY[q]) quality = q;
+  } catch (_) {}
+}
+setQuality(quality);
+
+// 软件渲染额外提示
+if (softGL) {
+  const box = el('err');
+  box.innerHTML = '⚠ 检测到浏览器正在用 <b>CPU 软件渲染</b>(Microsoft Basic Render),' +
+    '性能会很低。<br><br>解决办法:<br>' +
+    '· 浏览器设置里打开「硬件加速」,然后<b>完全重启浏览器</b><br>' +
+    '· 若通过远程桌面连接,请在<b>本机</b>打开此页面<br>' +
+    '· 检查显卡驱动是否正常<br><br>' +
+    '<span style="color:#8794a8">已自动切换到最低画质,可勉强浏览。</span>';
+  box.classList.add('show');
+  setTimeout(() => box.classList.remove('show'), 15000);
+}
+
+load(0);
+</script>
+</body>
+</html>
